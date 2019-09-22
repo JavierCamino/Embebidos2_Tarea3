@@ -35,7 +35,7 @@
 #define EVENT_HOURS_BITMASK			(1 << 2)
 
 #define SECONDS_TASK_PRIORITY		(configMAX_PRIORITIES - 1U)
-#define MINUTES_TASK_PRIORITY		(configMAX_PRIORITIES - 3U)
+#define MINUTES_TASK_PRIORITY		(configMAX_PRIORITIES - 2U)
 #define HOURS_TASK_PRIORITY			(configMAX_PRIORITIES - 4U)
 #define ALARM_TASK_PRIORITY			(configMAX_PRIORITIES - 2U)
 #define PRINT_TASK_PRIORITY			(configMAX_PRIORITIES - 2U)
@@ -126,8 +126,6 @@ static void print_task(void *pvParameters);
 
 
 
-
-
 int main(void) {
 
   	/* Init board hardware. */
@@ -163,7 +161,7 @@ int main(void) {
     CREATE_TASK(print_task, PRINT_TASK_NAME, configMINIMAL_STACK_SIZE, NULL, PRINT_TASK_PRIORITY, NULL);
 
 
-    PRINTF("Alarm Clock Initialization Successful\n");
+    PRINTF("Alarm Clock Initialization Successful\r\n");
 
 
     /* Start scheduler */
@@ -210,7 +208,7 @@ static void seconds_task(void *pvParameters)
 
 
     	/* Execute periodically each second. */
-    	vTaskDelay( pdMS_TO_TICKS(1000) );
+    	vTaskDelay( pdMS_TO_TICKS(500U) );
     }
 }
 static void minutes_task(void *pvParameters)
@@ -218,8 +216,8 @@ static void minutes_task(void *pvParameters)
 	static uint8_t minutes     = INITIAL_MINUTES;
 	static time_msg_t uart_msg = {minutes_type, INITIAL_MINUTES};
 
-    for (;;)
-    {
+//    for (;;)
+//    {
 
     	/* Wait for semaphore to free. */
     	while(pdPASS != xSemaphoreTake(xMinutes_semaphore, 0) );
@@ -250,7 +248,7 @@ static void minutes_task(void *pvParameters)
     	xQueueSendToBack(UART_mailbox, &uart_msg, 0);
 
 
-    }
+//    }
 }
 static void hours_task(void *pvParameters)
 {
@@ -305,7 +303,7 @@ static void alarm_task(void *pvParameters)
 		/* Take semaphore */
 		while(pdPASS != xSemaphoreTake(xUART_semaphore, 0) );
 		/* Critic Section */
-		PRINTF("ALARM!\n");
+		PRINTF("ALARM!\r\n");
 		/* Release semaphore */
 		xSemaphoreGive(xUART_semaphore);
 
@@ -334,7 +332,7 @@ static void print_task(void *pvParameters)
 		/* Take semaphore */
 		while(pdPASS != xSemaphoreTake(xUART_semaphore, 0) );
 		/* Critic Section */
-		PRINTF("%02d:%02d:%02d\n",hours, minutes, seconds);
+		PRINTF("%02d:%02d:%02d\r\n",hours, minutes, seconds);
 		/* Release semaphore */
 		xSemaphoreGive(xUART_semaphore);
 
