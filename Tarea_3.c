@@ -26,19 +26,19 @@
 #define ALARM_TASK_NAME				"alarm_task"
 #define PRINT_TASK_NAME				"print_task"
 
-#define INITIAL_SECONDS				(15U)
-#define INITIAL_MINUTES 			(17U)
-#define INITIAL_HOURS    			(4U )
+#define INITIAL_SECONDS				(0U)
+#define INITIAL_MINUTES 			(0U)
+#define INITIAL_HOURS    			(0U)
 
 #define EVENT_SECONDS_BITMASK		(1 << 0)
 #define EVENT_MINUTES_BITMASK		(1 << 1)
 #define EVENT_HOURS_BITMASK			(1 << 2)
 
 #define SECONDS_TASK_PRIORITY		(configMAX_PRIORITIES - 1U)
-#define MINUTES_TASK_PRIORITY		(configMAX_PRIORITIES - 1U)
-#define HOURS_TASK_PRIORITY			(configMAX_PRIORITIES - 1U)
-#define ALARM_TASK_PRIORITY			(configMAX_PRIORITIES - 1U)
-#define PRINT_TASK_PRIORITY			(configMAX_PRIORITIES - 1U)
+#define MINUTES_TASK_PRIORITY		(configMAX_PRIORITIES - 3U)
+#define HOURS_TASK_PRIORITY			(configMAX_PRIORITIES - 4U)
+#define ALARM_TASK_PRIORITY			(configMAX_PRIORITIES - 2U)
+#define PRINT_TASK_PRIORITY			(configMAX_PRIORITIES - 2U)
 
 #define CREATE_TASK(a,b,c,d,e,f)	{												\
 										if( pdPASS != xTaskCreate(a,b,c,d,e,f) )	\
@@ -89,8 +89,8 @@ typedef struct
 /* Global variables */
 /////////////////////////////////////////
 uint8_t alarm_seconds = 5;
-uint8_t alarm_minutes = 2;
-uint8_t alarm_hours   = 3;
+uint8_t alarm_minutes = 0;
+uint8_t alarm_hours   = 0;
 
 
 /////////////////////////////////////////
@@ -146,6 +146,9 @@ int main(void) {
 
     /* Create Event */
     CREATE_EVENTGROUP(alarm_event_group);
+    if(INITIAL_SECONDS == alarm_seconds) xEventGroupSetBits(alarm_event_group, EVENT_SECONDS_BITMASK);
+    if(INITIAL_MINUTES == alarm_minutes) xEventGroupSetBits(alarm_event_group, EVENT_MINUTES_BITMASK);
+    if(INITIAL_HOURS   == alarm_hours  ) xEventGroupSetBits(alarm_event_group, EVENT_HOURS_BITMASK);
 
 
     /* Create Queue */
@@ -160,18 +163,12 @@ int main(void) {
     CREATE_TASK(print_task, PRINT_TASK_NAME, configMINIMAL_STACK_SIZE, NULL, PRINT_TASK_PRIORITY, NULL);
 
 
-    PRINTF("Hello World\n");
+    PRINTF("Alarm Clock Initialization Successful\n");
 
-    /* Force the counter to be placed into memory. */
-    volatile static int i = 0 ;
-    /* Enter an infinite loop, just incrementing a counter. */
-    while(1) {
-        i++ ;
-        /* 'Dummy' NOP to allow source level single stepping of
-            tight while() loop */
-        __asm volatile ("nop");
-    }
-    return 0 ;
+
+    /* Start scheduler */
+    vTaskStartScheduler();
+    for(;;);
 }
 
 
@@ -186,7 +183,6 @@ static void seconds_task(void *pvParameters)
 
     for (;;)
     {
-
         /* Increment seconds count. */
     	seconds++;
 
