@@ -57,6 +57,14 @@
 											for(;;);								\
 										}											\
 									}
+#define CREATE_MUTEX(r)				{												\
+										r = xSemaphoreCreateMutex();				\
+										if(NULL == r)								\
+										{											\
+											PRINTF("%s creation failed.\r\n",#r);	\
+											for(;;);								\
+										}											\
+									}
 #define CREATE_EVENTGROUP(r)		{												\
 										r = xEventGroupCreate();					\
 										if(NULL == r)								\
@@ -104,9 +112,9 @@ static QueueHandle_t UART_mailbox 			= NULL;
 /////////////////////////////////////////
 /* Semaphores */
 /////////////////////////////////////////
-SemaphoreHandle_t xMinutes_semaphore 		= NULL;
-SemaphoreHandle_t xHours_semaphore 			= NULL;
-SemaphoreHandle_t xUART_semaphore 			= NULL;
+SemaphoreHandle_t xMinutes_Semaphore 		= NULL;
+SemaphoreHandle_t xHours_Semaphore 			= NULL;
+SemaphoreHandle_t xUART_MutexSemaphore 		= NULL;
 
 
 /////////////////////////////////////////
@@ -119,10 +127,15 @@ static EventGroupHandle_t alarm_event_group = NULL;
 /* Tasks */
 /////////////////////////////////////////
 static void seconds_task(void *pvParameters);
+TaskHandle_t seconds_task_handle = 0;
 static void minutes_task(void *pvParameters);
+TaskHandle_t minutes_task_handle = 0;
 static void hours_task(void *pvParameters);
+TaskHandle_t hours_task_handle = 0;
 static void alarm_task(void *pvParameters);
+TaskHandle_t alarm_task_handle = 0;
 static void print_task(void *pvParameters);
+TaskHandle_t print_task_handle = 0;
 
 
 
@@ -139,9 +152,9 @@ int main(void) {
 
 
     /* Create Semaphores */
-    CREATE_SEMAPHORE(xMinutes_semaphore);
-    CREATE_SEMAPHORE(xHours_semaphore);
-    CREATE_SEMAPHORE(xUART_semaphore);
+    CREATE_SEMAPHORE(xMinutes_Semaphore);
+    CREATE_SEMAPHORE(xHours_Semaphore);
+    CREATE_SEMAPHORE(xUART_MutexSemaphore);
 
 
     /* Create Event */
@@ -156,11 +169,11 @@ int main(void) {
 
 
     /* Create tasks. */
-    CREATE_TASK(seconds_task, SECONDS_TASK_NAME, configMINIMAL_STACK_SIZE, NULL, SECONDS_TASK_PRIORITY, NULL);
-    CREATE_TASK(minutes_task, MINUTES_TASK_NAME, configMINIMAL_STACK_SIZE, NULL, MINUTES_TASK_PRIORITY, NULL);
-    CREATE_TASK(hours_task, HOURS_TASK_NAME, configMINIMAL_STACK_SIZE, NULL, HOURS_TASK_PRIORITY, NULL);
-    CREATE_TASK(alarm_task, ALARM_TASK_NAME, configMINIMAL_STACK_SIZE, NULL, ALARM_TASK_PRIORITY, NULL);
-    CREATE_TASK(print_task, PRINT_TASK_NAME, configMINIMAL_STACK_SIZE, NULL, PRINT_TASK_PRIORITY, NULL);
+    CREATE_TASK(seconds_task, SECONDS_TASK_NAME, configMINIMAL_STACK_SIZE, NULL, SECONDS_TASK_PRIORITY, &seconds_task_handle);
+    CREATE_TASK(minutes_task, MINUTES_TASK_NAME, configMINIMAL_STACK_SIZE, NULL, MINUTES_TASK_PRIORITY, &minutes_task_handle);
+    CREATE_TASK(hours_task, HOURS_TASK_NAME, configMINIMAL_STACK_SIZE, NULL, HOURS_TASK_PRIORITY, &hours_task_handle);
+    CREATE_TASK(alarm_task, ALARM_TASK_NAME, configMINIMAL_STACK_SIZE, NULL, ALARM_TASK_PRIORITY, &alarm_task_handle);
+    CREATE_TASK(print_task, PRINT_TASK_NAME, configMINIMAL_STACK_SIZE, NULL, PRINT_TASK_PRIORITY, &print_task_handle);
 
 
     PRINTF("Alarm Clock Initialization Successful\r\n");
@@ -168,8 +181,38 @@ int main(void) {
 
     /* Start scheduler */
     vTaskStartScheduler();
+
+
+
+
+
+    /* Infinite loop */
     for(;;);
+
+
+
+
+
+    /* Delete semaphores */
+    vSemaphoreDelete(xMinutes_Semaphore);
+    vSemaphoreDelete(xHours_Semaphore);
+    vSemaphoreDelete(xUART_MutexSemaphore);
+
+    /* Delete EventGroup */
+    vEventGroupDelete(alarm_event_group);
+
+    /* Delete Queue*/
+    vQueueDelete(UART_mailbox);
+
+    /* Delete Tasks*/
+    vTaskDelete(seconds_task_handle);
+    vTaskDelete(minutes_task_handle);
+    vTaskDelete(hours_task_handle);
+    vTaskDelete(alarm_task_handle);
+    vTaskDelete(print_task_handle);
 }
+
+
 
 
 
@@ -179,7 +222,7 @@ static void seconds_task(void *pvParameters)
 	static time_msg_t uart_msg = {seconds_type, INITIAL_SECONDS};
 
 	/* Free UART semaphore */
-	xSemaphoreGive(xUART_semaphore);
+	xSemaphoreGive(xUART_MutexSemaphore);
 
     for (;;)
     {
@@ -193,7 +236,7 @@ static void seconds_task(void *pvParameters)
     		/* Reset counter */
     		seconds = 0;
     		/* Free semaphore */
-    		xSemaphoreGive(xMinutes_semaphore);
+    		xSemaphoreGive(xMinutes_Semaphore);
     	}
 
 
@@ -222,7 +265,7 @@ static void minutes_task(void *pvParameters)
     {
 
     	/* Wait for semaphore to free. */
-    	while(pdPASS != xSemaphoreTake(xMinutes_semaphore, portMAX_DELAY) );
+    	while(pdPASS != xSemaphoreTake(xMinutes_Semaphore, portMAX_DELAY) );
 
         /* Increment minutes count. */
     	minutes++;
@@ -234,7 +277,7 @@ static void minutes_task(void *pvParameters)
     		/* Reset counter */
     		minutes = 0;
     		/* Free semaphore */
-    		xSemaphoreGive(xHours_semaphore);
+    		xSemaphoreGive(xHours_Semaphore);
     	}
 
 
@@ -261,7 +304,7 @@ static void hours_task(void *pvParameters)
     {
 
     	/* Wait for semaphore to free. */
-    	while(pdPASS != xSemaphoreTake(xHours_semaphore, portMAX_DELAY) );
+    	while(pdPASS != xSemaphoreTake(xHours_Semaphore, portMAX_DELAY) );
 
         /* Increment minutes count. */
     	hours++;
@@ -303,11 +346,11 @@ static void alarm_task(void *pvParameters)
 			 );
 
 		/* Take semaphore */
-		while(pdPASS != xSemaphoreTake(xUART_semaphore, portMAX_DELAY) );
+		while(pdPASS != xSemaphoreTake(xUART_MutexSemaphore, portMAX_DELAY) );
 		/* Critic Section */
 		PRINTF("ALARM!\r\n");
 		/* Release semaphore */
-		xSemaphoreGive(xUART_semaphore);
+		xSemaphoreGive(xUART_MutexSemaphore);
 
 	}
 }
@@ -335,11 +378,11 @@ static void print_task(void *pvParameters)
 		if(0 == uxQueueMessagesWaiting(UART_mailbox))
 		{
 			/* Take semaphore */
-			while(pdPASS != xSemaphoreTake(xUART_semaphore, portMAX_DELAY) );
+			while(pdPASS != xSemaphoreTake(xUART_MutexSemaphore, portMAX_DELAY) );
 			/* Critic Section */
 			PRINTF("%02d:%02d:%02d\r\n",hours, minutes, seconds);
 			/* Release semaphore */
-			xSemaphoreGive(xUART_semaphore);
+			xSemaphoreGive(xUART_MutexSemaphore);
 		}
 
 	}
